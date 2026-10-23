@@ -1,0 +1,13 @@
+{
+  "lesson": "C40",
+  "title": "Lifecycle Interceptors and Execution Audit",
+  "path": "lesson-c40\\lesson-c40-app",
+  "port": 3040,
+  "scenarios": 2,
+  "state": "implemented and verified",
+  "liveScope": "text-only commentary about the local result",
+  "typecheck": true,
+  "localTests": true,
+  "browserSmoke": "passed: desktop, mobile, scenario controls, source view",
+  "liveCommentarySmoke": "passed: real text-only session reached end_turn"
+}

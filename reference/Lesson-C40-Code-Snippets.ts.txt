@@ -1,0 +1,63 @@
+import type { BetaManagedAgentsSessionEvent as Event } from "@anthropic-ai/sdk/resources/beta/sessions/events";
+export type AuditRow = { sessionId: string; eventId: string; type: Event["type"];
+  tool?: string; permission?: string; modelRequestId?: string;
+  usage?: { input: number; output: number; cacheRead: number; cacheWrite: number };
+  idleReason?: string; terminated?: boolean };
+export function project(sessionId: string, event: Event): AuditRow {
+  const row: AuditRow = { sessionId, eventId: event.id, type: event.type };
+  if (event.type === "agent.tool_use" || event.type === "agent.mcp_tool_use") {
+    row.tool = event.name; row.permission = event.evaluated_permission;
+  }
+  if (event.type === "span.model_request_end") {
+    row.modelRequestId = event.model_request_start_id;
+    row.usage = { input: event.model_usage.input_tokens, output: event.model_usage.output_tokens,
+      cacheRead: event.model_usage.cache_read_input_tokens,
+      cacheWrite: event.model_usage.cache_creation_input_tokens };
+  }
+  if (event.type === "session.status_idle") row.idleReason = event.stop_reason.type;
+  if (event.type === "session.status_terminated") row.terminated = true;
+  return row;
+}
+// In-process illustration of a UNIQUE(sessionId,eventId) write.
+// Production persists rows and projection checkpoints transactionally.
+export class AuditStore {
+  rows = new Map<string, AuditRow>();
+  append(row: AuditRow) {
+    const key = JSON.stringify([row.sessionId, row.eventId]);
+    const old = this.rows.get(key);
+    if (old) {
+      if (JSON.stringify(old) !== JSON.stringify(row)) throw new Error("Conflicting canonical event");
+      return false;
+    }
+    this.rows.set(key, structuredClone(row));
+    return true;
+  }
+  summary(sessionId: string) {
+    const requests = new Set<string>();
+    const result = { eventCount: 0, toolRequests: 0, input: 0, output: 0,
+      cacheRead: 0, cacheWrite: 0, latestIdleReason: "unknown" };
+    for (const row of this.rows.values()) {
+      if (row.sessionId !== sessionId) continue;
+      result.eventCount++;
+      if (row.tool) result.toolRequests++;
+      if (row.modelRequestId && row.usage && !requests.has(row.modelRequestId)) {
+        requests.add(row.modelRequestId);
+        result.input += row.usage.input; result.output += row.usage.output;
+        result.cacheRead += row.usage.cacheRead; result.cacheWrite += row.usage.cacheWrite;
+      }
+      if (row.idleReason) result.latestIdleReason = row.idleReason;
+      // A later running transition makes a prior idle status historical.
+      if (row.type === "session.status_running") result.latestIdleReason = "running";
+      if (row.terminated) result.latestIdleReason = "terminated";
+    }
+    return result; // Consumption from observed model spans, not invoice cost.
+  }
+}
+export async function audit(sessionId: string, canonicalEvents: AsyncIterable<Event>, store: AuditStore) {
+  for await (const event of canonicalEvents) store.append(project(sessionId, event));
+  return store.summary(sessionId);
+}
+// Supply ordered canonical history+live events after reconciliation. Previews
+// are not accepted. Rebuild summaries in canonical order, not reconnect arrival order.
+// No completeness claim: history pagination, threads and coverage are separate.
+// Persistence failures must stop checkpoint advancement. A console log is not immutable storage.

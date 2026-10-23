@@ -1,0 +1,29 @@
+{
+  "source": "live-provider-commentary",
+  "sessionId": "sesn_01CeoaGcewCA7WgAXJhdNWmz",
+  "answer": "This local experiment, titled **\"Lifecycle Interceptors and Execution Audit,\"** models a three-stage event sequence (call \u2192 confirmation \u2192 result) and records canonical observations about each stage. Its key finding is that a completed tool execution cannot be retroactively vetoed (`canVetoCompletedTool: false`). The prescribed steps are to project canonical event fields, deduplicate by session and event, and append records before any checkpoint advancement.",
+  "stopReason": "end_turn",
+  "eventTypes": [
+    "session.status_running",
+    "session.thread_status_running",
+    "user.message",
+    "span.model_request_start",
+    "agent.thinking",
+    "agent.message",
+    "span.model_request_end",
+    "session.thread_status_idle",
+    "session.usage",
+    "session.status_idle"
+  ],
+  "requestUsage": [
+    {
+      "cache_creation_input_tokens": 0,
+      "cache_read_input_tokens": 0,
+      "input_tokens": 654,
+      "output_tokens": 131,
+      "speed": "standard"
+    }
+  ],
+  "experimentHash": "05061069505438a51cacc0220223ffa68d182335b15faacd159389e3d1e4519c",
+  "scope": "A real text-only model response about the local experiment. External integrations and the experiment's correctness are not certified by this response."
+}
