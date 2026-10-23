@@ -42,26 +42,73 @@ CLAUDE_MANAGED_ENVIRONMENT_ID=your_environment_id
 PORT=3040
 ```
 
-## How the application was developed
+## How the app was build
 
-The browser collects inputs; the Node host validates requests; the lesson implementation produces observable evidence. The architecture page walks through the real source with numbered steps, prerequisite configuration, source filenames and code excerpts.
+### 1. Stop checkpoint advancement after a failed append
 
-### Lesson implementation
+The authored persistence failure returns incomplete with a null checkpoint. Treating it as success would risk losing an observation on the next recovery.
 
-[src/lesson.ts](https://github.com/luiscoco/Udemy-claude-managed-agents-lesson-c40-app/blob/main/src/lesson.ts)
+Source: [src/lesson.ts](src/lesson.ts#L13)
 
 ```typescript
-  async run(input) {
-
-if(flag(input,"appendFails"))return report("incomplete","Audit persistence failed; checkpoint did not advance",{rows:0,checkpoint:null},["Attempt append","Surface failure before marking handled"]);
-const rows=unique(list(input,"events").map(String)).map((kind,index)=>({eventId:`audit-${kind}`,sequence:index,type:kind,inputValues:"redacted"}));
-return report("passed","Recorded canonical observations without inventing a post-execution veto",{rows:rows.length,audit:rows,canVetoCompletedTool:false},["Project canonical event fields","Deduplicate by session and event","Append before checkpoint advancement"]);
-
-  }
-};
+if (flag(input, "appendFails"))
+  return report(
+    "incomplete",
+    "Audit persistence failed; checkpoint did not advance",
+    { rows: 0, checkpoint: null },
+    ["Attempt append", "Surface failure before marking handled"],
+  );
 ```
 
-Read the architecture page for the remaining source excerpts and explanations, including input handling and optional provider behavior. The diagram describes this application, rather than implying that an external integration has been implemented.
+### 2. Project redacted canonical observations
+
+The projection deduplicates event labels and stores redacted input values. canVetoCompletedTool is false: an audit observation after execution is not a retroactive permission gate.
+
+Source: [src/lesson.ts](src/lesson.ts#L14) · selected statements
+
+```typescript
+const rows = unique(list(input, "events").map(String)).map((kind, index) => ({
+  eventId: `audit-${kind}`,
+  sequence: index,
+  type: kind,
+  inputValues: "redacted",
+}));
+
+return report(
+  "passed",
+  "Recorded canonical observations without inventing a post-execution veto",
+  { rows: rows.length, audit: rows, canVetoCompletedTool: false },
+  [
+    "Project canonical event fields",
+    "Deduplicate by session and event",
+    "Append before checkpoint advancement",
+  ],
+);
+```
+
+### Check your understanding
+
+Run **Audit repeated result delivery** in the application. Compare the result with these scenario expectations:
+
+```json
+{
+  "input": {
+    "events": [
+      "call",
+      "confirmation",
+      "result",
+      "result"
+    ],
+    "appendFails": false
+  },
+  "expectedOutcome": "passed",
+  "checkEvidence": {
+    "rows": 3
+  }
+}
+```
+
+Then try **Do not advance on storage failure**. Its expected outcome is `incomplete`; identify the condition or evidence field that explains the difference.
 
 ## Validation
 
